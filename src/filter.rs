@@ -6,7 +6,7 @@
 //!
 //! The paper's authors have provided a reference C++ implementation in this repository: https://github.com/efficient/cuckoofilter
 
-use crate::hash;
+use crate::hash::{self, byte_fingerprint_short};
 
 type Input = [u8];
 type BucketIndex = u32;
@@ -20,7 +20,9 @@ const ITEM_LIMIT: usize = u32::MAX as usize * BUCKET_SIZE as usize;
 /// Easily swap hash functions during development, TODO: pick one
 const HASH_FN: fn(&[u8]) -> u32 = hash::hash_djb2;
 
-/// We need to cache items that have been evicted so we can relocate them, this is the shape of that cache
+/// An eviction cache holds an item that we couldn't reinsert
+///
+/// An item being here means that the filter is "probabilistically full". It may not be technically 100% saturated, but we ran into so many hash collisions that we had to stop. (Using a bad hash function may result in being "full" early)
 struct EvictionVictim {
     index: u32,
     fingerprint: Fingerprint,
@@ -34,12 +36,6 @@ impl EvictionVictim {
             fingerprint: 0,
             used: false,
         }
-    }
-
-    fn reset(&mut self) {
-        self.index = 0;
-        self.fingerprint = 0;
-        self.used = false;
     }
 }
 
@@ -193,7 +189,7 @@ impl CuckooFilter {
             target_bucket_index =
                 self.bucket_from_evicted(target_bucket_index, evicted_fingerprint);
         }
-        // If MAX_EVICTIONS is reached, store the fingerprint in the eviction cache
+        // If MAX_EVICTIONS is reached, store the fingerprint in the eviction cache -- this avoids "missing" the item we couldn't insert so that lookups are still correct even when it's full
         self.eviction_cache.index = target_bucket_index;
         self.eviction_cache.fingerprint = evicted_fingerprint;
         self.eviction_cache.used = true;
@@ -206,7 +202,24 @@ impl CuckooFilter {
     }
 
     /// Check if item is in filter
-    pub fn lookup(item: &Input) -> bool {
+    pub fn lookup(&self, item: &Input) -> bool {
+        let (candidate_1, candidate_2, fingerprint) = self.buckets_from_item(item);
+        // Check cache
+        if self.eviction_cache.used
+            && fingerprint == self.eviction_cache.fingerprint
+            && (self.eviction_cache.index == candidate_1
+                || self.eviction_cache.index == candidate_2)
+        {
+            return true;
+        }
+        // Check buckets
+        for &bucket_index in &[candidate_1, candidate_2] {
+            for entry in self.data[bucket_index as usize] {
+                if entry == fingerprint {
+                    return true;
+                }
+            }
+        }
         false
     }
 
