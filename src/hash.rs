@@ -2,7 +2,7 @@
 
 /// DBJ2 hash function
 ///
-/// Source: http://www.cse.yorku.ca/~oz/hash.html
+/// Source: <http://www.cse.yorku.ca/~oz/hash.html>
 pub fn hash_djb2(input: &[u8]) -> u32 {
     let mut hash: u32 = 5381;
     for &byte in input {
@@ -13,7 +13,7 @@ pub fn hash_djb2(input: &[u8]) -> u32 {
 
 /// SBDM hash function
 ///
-/// Source: http://www.cse.yorku.ca/~oz/hash.html
+/// Source: <http://www.cse.yorku.ca/~oz/hash.html>
 pub fn hash_sbdm(input: &[u8]) -> u32 {
     let mut hash: u32 = 0;
     for &byte in input {

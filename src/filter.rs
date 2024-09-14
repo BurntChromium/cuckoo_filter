@@ -4,7 +4,7 @@
 //!
 //! The paper recommends a (2, 4) CF (2 possible buckets for each item, and 4 fingerprints in each bucket) because it's space optimal for practical false positive rates. Assuming our CF will hold up to a few billion items, 6 bits per fingerprint is sufficient (24 bits per bucket), but we round up to one byte per fingerprint for the sake of practicality.
 //!
-//! The paper's authors have provided a reference C++ implementation in this repository: https://github.com/efficient/cuckoofilter
+//! The paper's authors have provided a reference C++ implementation in this repository: <https://github.com/efficient/cuckoofilter>
 
 use crate::hash;
 
