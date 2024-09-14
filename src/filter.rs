@@ -6,7 +6,7 @@
 //!
 //! The paper's authors have provided a reference C++ implementation in this repository: https://github.com/efficient/cuckoofilter
 
-use crate::hash::{self, byte_fingerprint_short};
+use crate::hash;
 
 type Input = [u8];
 type BucketIndex = u32;
