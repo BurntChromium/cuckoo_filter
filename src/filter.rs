@@ -37,6 +37,12 @@ impl EvictionVictim {
             used: false,
         }
     }
+
+    fn reset(&mut self) {
+        self.index = 0;
+        self.fingerprint = 0;
+        self.used = false;
+    }
 }
 
 /// An error that can result at "runtime" when performing insert/delete operations
@@ -47,6 +53,11 @@ pub enum CuckooFilterOpError {
 }
 
 /// A Cuckoo Filter that holds up to 17 billion items
+///
+/// ### Notes
+///
+/// - The eviction cache holds an item that we couldn't reinsert, and represents when the data structure is effectively/probabilistically full (as opposed to mechanically full)
+/// - The `length_u32` parameter lets us wrap around (modulo) bucket indices that would be too large
 pub struct CuckooFilter {
     eviction_cache: EvictionVictim,
     data: Vec<[Fingerprint; BUCKET_SIZE]>,
@@ -155,6 +166,7 @@ impl CuckooFilter {
 
     /// Add item to filter. Returns Err if filter is full
     pub fn insert(&mut self, item: &Input) -> Result<(), CuckooFilterOpError> {
+        // If the cache is filled then we're (effectively) out of space
         if self.eviction_cache.used {
             return Err(CuckooFilterOpError::OutOfSpace);
         }
@@ -197,9 +209,9 @@ impl CuckooFilter {
     }
 
     /// Add item to filter. Returns Err if filter is full, or if item already exists.
-    pub fn insert_unique(item: &Input) -> Result<(), CuckooFilterOpError> {
-        Ok(())
-    }
+    // pub fn insert_unique(item: &Input) -> Result<(), CuckooFilterOpError> {
+    //     Ok(())
+    // }
 
     /// Check if item is in filter
     pub fn lookup(&self, item: &Input) -> bool {
@@ -224,7 +236,42 @@ impl CuckooFilter {
     }
 
     /// Delete an item from the filter
-    pub fn delete(item: &Input) -> Result<(), CuckooFilterOpError> {
-        Ok(())
+    pub fn delete(&mut self, item: &Input) -> Result<(), CuckooFilterOpError> {
+        let (candidate_1, candidate_2, fingerprint) = self.buckets_from_item(item);
+        // Check cache and clear if found
+        if self.eviction_cache.used
+            && fingerprint == self.eviction_cache.fingerprint
+            && (self.eviction_cache.index == candidate_1
+                || self.eviction_cache.index == candidate_2)
+        {
+            self.eviction_cache.reset();
+            return Ok(());
+        }
+        // Check buckets and clear if found
+        for &bucket_index in &[candidate_1, candidate_2] {
+            for ref mut entry in self.data[bucket_index as usize] {
+                if *entry == fingerprint {
+                    *entry = 0;
+                    return Ok(());
+                }
+            }
+        }
+        Err(CuckooFilterOpError::ItemDoesNotExist)
+    }
+}
+
+/* -------------------- Unit Tests -------------------- */
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn make_filter_normal_conditions() {
+        let filter = CuckooFilter::new(128);
+        assert!(filter.is_ok());
+        let cf = filter.unwrap();
+        assert_eq!(cf.length_u32, 128 / 4);
+        assert_eq!(0, cf.data.len() as u32);
     }
 }
