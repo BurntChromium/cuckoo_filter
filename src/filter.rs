@@ -156,10 +156,10 @@ impl CuckooFilter {
         bucket_index: BucketIndex,
         fingerprint: Fingerprint,
     ) -> bool {
-        let mut bucket = self.data[bucket_index as usize];
-        for f_print in bucket.iter_mut() {
-            if *f_print == 0 {
-                *f_print = fingerprint;
+        let bucket = &mut self.data[bucket_index as usize];
+        for slot in bucket.iter_mut() {
+            if *slot == 0 {
+                *slot = fingerprint;
                 return true;
             }
         }
@@ -173,7 +173,7 @@ impl CuckooFilter {
         fingerprint: Fingerprint,
         slot: usize,
     ) -> Fingerprint {
-        let mut bucket = self.data[bucket_index as usize];
+        let bucket = &mut self.data[bucket_index as usize];
         let evicted_fingerprint = bucket[slot];
         bucket[slot] = fingerprint;
         evicted_fingerprint
@@ -264,7 +264,7 @@ impl CuckooFilter {
         }
         // Check buckets and clear if found
         for &bucket_index in &[candidate_1, candidate_2] {
-            for ref mut entry in self.data[bucket_index as usize] {
+            for entry in &mut self.data[bucket_index as usize] {
                 if *entry == fingerprint {
                     *entry = 0;
                     return Ok(());
@@ -309,5 +309,31 @@ mod tests {
         let mut cf = filter.unwrap();
         let r = cf.insert(&[1, 2, 3, 4, 5]);
         assert!(r.is_ok());
+    }
+
+    #[test]
+    fn retrieve_item() {
+        let filter = CuckooFilter::new(128, false);
+        let mut cf = filter.unwrap();
+        let item = [1u8, 2, 3, 4, 5];
+        let r = cf.insert(&item);
+        assert!(r.is_ok());
+        let is_found = cf.lookup(&item);
+        assert!(is_found);
+    }
+
+    #[test]
+    fn delete_item() {
+        let filter = CuckooFilter::new(128, false);
+        let mut cf = filter.unwrap();
+        let item = [1u8, 2, 3, 4, 5];
+        let r = cf.insert(&item);
+        assert!(r.is_ok());
+        let is_found = cf.lookup(&item);
+        assert!(is_found);
+        let d = cf.delete(&item);
+        assert!(d.is_ok());
+        // Check that the item is no longer present
+        assert!(!cf.lookup(&item));
     }
 }
