@@ -1,12 +1,12 @@
 //! Implementations of hash functions
 
-/// DBJ2 hash function
+/// DBJ2 hash function, with XOR instead of add
 ///
 /// Source: <http://www.cse.yorku.ca/~oz/hash.html>
 pub fn hash_djb2(input: &[u8]) -> u32 {
     let mut hash: u32 = 5381;
     for &byte in input {
-        hash = hash.wrapping_mul(33).wrapping_add(byte as u32);
+        hash = hash.wrapping_mul(33) ^ (byte as u32);
     }
     hash
 }
