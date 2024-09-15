@@ -15,14 +15,17 @@ type Fingerprint = u8;
 const MAX_EVICTIONS: u16 = 500;
 /// Each bucket holds 4 fingerprints
 const BUCKET_SIZE: usize = 4;
-/// We support up to u32 buckets, which means we can hold `u32::MAX * 4` items
-const ITEM_LIMIT: usize = u32::MAX as usize * BUCKET_SIZE as usize;
+/// With 32 bit hash functions, we can hold (address) up to 32 bits worth of buckets
+const MAX_BUCKETS: usize = u32::MAX as usize;
+/// The item limit needs to respect the POW(2) rounding we do
+const ITEM_LIMIT: usize = (MAX_BUCKETS.next_power_of_two() >> 1) * BUCKET_SIZE as usize;
 /// Easily swap hash functions during development, TODO: pick one
 const HASH_FN: fn(&[u8]) -> u32 = hash::hash_djb2;
 
 /// An eviction cache holds an item that we couldn't reinsert
 ///
 /// An item being here means that the filter is "probabilistically full". It may not be technically 100% saturated, but we ran into so many hash collisions that we had to stop. (Using a bad hash function may result in being "full" early)
+#[derive(Debug)]
 struct EvictionVictim {
     index: u32,
     fingerprint: Fingerprint,
@@ -45,19 +48,26 @@ impl EvictionVictim {
     }
 }
 
-/// An error that can result at "runtime" when performing insert/delete operations
-pub enum CuckooFilterOpError {
+/// Possible errors for the Cuckoo Filter
+#[derive(Debug, Eq, PartialEq)]
+pub enum CuckooFilterError {
+    /// Requested capacity at initialization exceeds item limit
+    CapacityExceedsItemLimit,
+    /// Model had too many collisions and ran out of effective space
     OutOfSpace,
+    /// For `insert_unique`, when item already exists
     ItemAlreadyExists,
+    /// For `delete`, when item doesn't exist
     ItemDoesNotExist,
 }
 
-/// A Cuckoo Filter that holds up to 17 billion items
+/// A Cuckoo Filter that holds up to 8.5 billion items
 ///
 /// ### Notes
 ///
 /// - The eviction cache holds an item that we couldn't reinsert, and represents when the data structure is effectively/probabilistically full (as opposed to mechanically full)
 /// - The `length_u32` parameter lets us wrap around (modulo) bucket indices that would be too large
+#[derive(Debug)]
 pub struct CuckooFilter {
     eviction_cache: EvictionVictim,
     data: Vec<[Fingerprint; BUCKET_SIZE]>,
@@ -67,24 +77,26 @@ pub struct CuckooFilter {
 impl CuckooFilter {
     /// Try to create a new Cuckoo Filter
     ///
-    /// This can fail if the desired filter would be too large.
+    /// This can fail if the desired filter would be too large. This evaluation can optionally be performed at compile time.
     ///
     /// ### Caveats
     ///
     /// - We must round the size of our backing vector of data to a power of two. This is because we will modulo the index when our hash function creates a bucket index bigger than the backing vector. If the data was *not* a power of 2, our indices would be subject to "Modulo bias" and cause more hash collisions.
-    pub fn new(max_items: usize) -> Result<CuckooFilter, String> {
+    pub fn new(
+        max_items: usize,
+        compile_time_check: bool,
+    ) -> Result<CuckooFilter, CuckooFilterError> {
         // Check item limit
+        if compile_time_check {
+            assert!(max_items < ITEM_LIMIT);
+        }
         if max_items > ITEM_LIMIT {
-            return Err(format!("requested cuckoo filter exceeds practical constraints, more than {ITEM_LIMIT} items is not supported"));
+            return Err(CuckooFilterError::CapacityExceedsItemLimit);
         }
         // If we didn't care about modulo bias, we could use this many buckets
         let number_of_buckets_exact: usize = max_items / BUCKET_SIZE;
         // But to avoid hash collisions, we round up
         let number_of_buckets_actual: usize = number_of_buckets_exact.next_power_of_two();
-        // Check for overflow after rounding to next power of two
-        if number_of_buckets_actual > u32::MAX as usize {
-            return Err(format!("requested cuckoo filter would exceed size constraints due to power of two rounding: requested items requires {number_of_buckets_actual} buckets, which is the next highest power of 2."));
-        }
         Ok(CuckooFilter {
             eviction_cache: EvictionVictim::new(),
             data: Vec::with_capacity(number_of_buckets_actual),
@@ -165,10 +177,10 @@ impl CuckooFilter {
     }
 
     /// Add item to filter. Returns Err if filter is full
-    pub fn insert(&mut self, item: &Input) -> Result<(), CuckooFilterOpError> {
+    pub fn insert(&mut self, item: &Input) -> Result<(), CuckooFilterError> {
         // If the cache is filled then we're (effectively) out of space
         if self.eviction_cache.used {
-            return Err(CuckooFilterOpError::OutOfSpace);
+            return Err(CuckooFilterError::OutOfSpace);
         }
 
         let (candidate_1, candidate_2, fingerprint) = self.buckets_from_item(item);
@@ -205,7 +217,7 @@ impl CuckooFilter {
         self.eviction_cache.index = target_bucket_index;
         self.eviction_cache.fingerprint = evicted_fingerprint;
         self.eviction_cache.used = true;
-        Err(CuckooFilterOpError::OutOfSpace)
+        Err(CuckooFilterError::OutOfSpace)
     }
 
     /// Add item to filter. Returns Err if filter is full, or if item already exists.
@@ -236,7 +248,7 @@ impl CuckooFilter {
     }
 
     /// Delete an item from the filter
-    pub fn delete(&mut self, item: &Input) -> Result<(), CuckooFilterOpError> {
+    pub fn delete(&mut self, item: &Input) -> Result<(), CuckooFilterError> {
         let (candidate_1, candidate_2, fingerprint) = self.buckets_from_item(item);
         // Check cache and clear if found
         if self.eviction_cache.used
@@ -256,7 +268,7 @@ impl CuckooFilter {
                 }
             }
         }
-        Err(CuckooFilterOpError::ItemDoesNotExist)
+        Err(CuckooFilterError::ItemDoesNotExist)
     }
 }
 
@@ -268,10 +280,30 @@ mod tests {
 
     #[test]
     fn make_filter_normal_conditions() {
-        let filter = CuckooFilter::new(128);
+        let filter = CuckooFilter::new(128, false);
         assert!(filter.is_ok());
         let cf = filter.unwrap();
         assert_eq!(cf.length_u32, 128 / 4);
         assert_eq!(0, cf.data.len() as u32);
+    }
+
+    // The filter should hold exactly the item limit but no more (error is around secondary checks relating to power of 2 rounding)
+    #[test]
+    fn make_filter_item_limit_boundary() {
+        let filter = CuckooFilter::new(ITEM_LIMIT, false);
+        assert!(filter.is_ok());
+        let filter2 = CuckooFilter::new(ITEM_LIMIT + 1, false);
+        assert!(filter2.is_err());
+        assert_eq!(
+            CuckooFilterError::CapacityExceedsItemLimit,
+            filter2.unwrap_err()
+        );
+    }
+
+    // Try to trigger this: max_items > ITEM_LIMIT
+    #[test]
+    fn make_filter_too_large_direct() {
+        let filter = CuckooFilter::new(u64::MAX as usize, false);
+        assert!(filter.is_err());
     }
 }
