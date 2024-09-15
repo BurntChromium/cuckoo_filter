@@ -19,10 +19,13 @@
 //! let mut filter = try_filter.unwrap();
 //! // Something to insert, as bytes
 //! let item = [1u8, 2, 3, 4, 5];
+//! // Insertions can fail if the filter is out of space
 //! let insertion = cf.insert(&item);
 //! assert!(insertion.is_ok());
+//! // Lookups cannot fail - returns True or False
 //! let is_found = cf.lookup(&item);
 //! assert!(is_found);
+//! // Deletion can fail if you try to delete something not in the filter 
 //! let deletion = cf.delete(&item);
 //! assert!(deletion.is_ok());
 //! // Check that the item is no longer present
