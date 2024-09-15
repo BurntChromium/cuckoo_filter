@@ -6,12 +6,37 @@ Cuckoo Filters are a probabilistic data structure. This means that when the CF s
 
 This crate implements a Cuckoo Filter with reasonable parameters for balancing overall capacity and achieving near optimal space savings. This filter can hold up to 8.5 billion items. At maximum size, this CF should consume about 4 GiB of RAM. This implementation is based off of [this paper (PDF link)](https://www.cs.cmu.edu/~binfan/papers/conext14_cuckoofilter.pdf).
 
-### Using the Filter
+This implementation supports `![no_std]`, but it does require `alloc` (to use a Vector).
+
+### Using this Cuckoo Filter
 
 There are three primary APIs for the filter: `insert`, `lookup`, and `delete` (this follows the paper's naming convention). 
 
+- `insert` places an item into the filter (well, it places the item's "fingerprint" into the filter)
+- `lookup` checks if the item is in the filter, and returns `true` if found, or `false` if not found
+- `delete` removes an item from the filter
+
+```rust
+// Try to make a filter supporting 128 items (can fail if you try to request more than item limit)
+let try_filter = CuckooFilter::new(128, false);
+let mut filter = try_filter.unwrap();
+// Something to insert, as bytes
+let item = [1u8, 2, 3, 4, 5];
+let insertion = cf.insert(&item);
+assert!(insertion.is_ok());
+let is_found = cf.lookup(&item);
+assert!(is_found);
+let deletion = cf.delete(&item);
+assert!(deletion.is_ok());
+// Check that the item is no longer present
+assert!(!filter.lookup(&item));
+```
+
 ### To Do List
 
-- Unit tests
+- ~~Unit tests~~ Basic unit tests are covered, now need to cover the edge cases
+- Switch to a proper (64 bit) hash function instead of DBJ2
+- Property tests
+- Benchmarking
 - Multi threading (first pass is probably an RwLock on the whole filter, more granular locks are possible but may not be worth the cost)
-- Better hash functions
+- Support `Hashable` objects so users don't need to get the bytes themselves?

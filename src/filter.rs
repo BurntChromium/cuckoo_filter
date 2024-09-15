@@ -8,6 +8,9 @@
 
 use crate::hash;
 
+use alloc::vec;
+use alloc::vec::Vec; // Import the vec! macro
+
 type Input = [u8];
 type BucketIndex = u32;
 type Fingerprint = u8;
