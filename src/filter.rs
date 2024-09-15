@@ -88,7 +88,7 @@ impl CuckooFilter {
     ) -> Result<CuckooFilter, CuckooFilterError> {
         // Check item limit
         if compile_time_check {
-            assert!(max_items < ITEM_LIMIT);
+            assert!(max_items < ITEM_LIMIT, "cuckoo filter initialized with too many items");
         }
         if max_items > ITEM_LIMIT {
             return Err(CuckooFilterError::CapacityExceedsItemLimit);
