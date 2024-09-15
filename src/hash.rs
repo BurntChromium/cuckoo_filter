@@ -14,7 +14,7 @@ pub fn hash_djb2(input: &[u8]) -> u32 {
 ///
 /// As in the C++ reference implementation, the fingerprint cannot be zero
 pub fn byte_fingerprint_long(hash_value: u32) -> u32 {
-    let fingerprint = hash_value % (1 << 8 - 1);
+    let fingerprint = hash_value % (1 << (8 - 1));
     // Prevent a fingerprint of 0 (because 0 implies empty bucket)
     fingerprint + (fingerprint == 0) as u32
 }

@@ -21,7 +21,7 @@ const BUCKET_SIZE: usize = 4;
 /// With 32 bit hash functions, we can hold (address) up to 32 bits worth of buckets
 const MAX_BUCKETS: usize = u32::MAX as usize;
 /// The item limit needs to respect the POW(2) rounding we do
-const ITEM_LIMIT: usize = (MAX_BUCKETS.next_power_of_two() >> 1) * BUCKET_SIZE as usize;
+const ITEM_LIMIT: usize = (MAX_BUCKETS.next_power_of_two() >> 1) * BUCKET_SIZE;
 /// Easily swap hash functions during development, TODO: pick one
 const HASH_FN: fn(&[u8]) -> u32 = hash::hash_djb2;
 
