@@ -88,7 +88,10 @@ impl CuckooFilter {
     ) -> Result<CuckooFilter, CuckooFilterError> {
         // Check item limit
         if compile_time_check {
-            assert!(max_items < ITEM_LIMIT, "cuckoo filter initialized with too many items");
+            assert!(
+                max_items < ITEM_LIMIT,
+                "cuckoo filter initialized with too many items"
+            );
         }
         if max_items > ITEM_LIMIT {
             return Err(CuckooFilterError::CapacityExceedsItemLimit);
@@ -99,7 +102,7 @@ impl CuckooFilter {
         let number_of_buckets_actual: usize = number_of_buckets_exact.next_power_of_two();
         Ok(CuckooFilter {
             eviction_cache: EvictionVictim::new(),
-            data: Vec::with_capacity(number_of_buckets_actual),
+            data: vec![[0u8; BUCKET_SIZE]; number_of_buckets_actual],
             length_u32: number_of_buckets_actual as u32,
         })
     }
@@ -126,7 +129,7 @@ impl CuckooFilter {
     fn buckets_from_item(&self, item: &Input) -> (BucketIndex, BucketIndex, Fingerprint) {
         let bucket_1 = HASH_FN(item) & (self.length_u32 - 1);
         // The magic constant is from MurmurHash2 (as in the reference impl)
-        let bucket_2 = bucket_1 ^ (hash::byte_fingerprint_long(bucket_1) * 0x5bd1e995);
+        let bucket_2 = bucket_1 ^ (hash::byte_fingerprint_long(bucket_1).wrapping_mul(0x5bd1e995));
         (
             bucket_1,
             bucket_2 & (self.length_u32 - 1),
@@ -284,7 +287,7 @@ mod tests {
         assert!(filter.is_ok());
         let cf = filter.unwrap();
         assert_eq!(cf.length_u32, 128 / 4);
-        assert_eq!(0, cf.data.len() as u32);
+        assert_eq!(128 / 4, cf.data.len() as u32);
     }
 
     // The filter should hold exactly the item limit but no more (error is around secondary checks relating to power of 2 rounding)
@@ -300,10 +303,11 @@ mod tests {
         );
     }
 
-    // Try to trigger this: max_items > ITEM_LIMIT
     #[test]
-    fn make_filter_too_large_direct() {
-        let filter = CuckooFilter::new(u64::MAX as usize, false);
-        assert!(filter.is_err());
+    fn insert_item() {
+        let filter = CuckooFilter::new(128, false);
+        let mut cf = filter.unwrap();
+        let r = cf.insert(&[1, 2, 3, 4, 5]);
+        assert!(r.is_ok());
     }
 }

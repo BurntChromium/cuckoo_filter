@@ -6,7 +6,6 @@ This crate implements a Cuckoo Filter with reasonable parameters for balancing o
 
 ### To Do List
 
-- Implement deletion
 - Unit tests
 - Multi threading (first pass is probably an RwLock on the whole filter, more granular locks are possible but may not be worth the cost)
 - Better hash functions

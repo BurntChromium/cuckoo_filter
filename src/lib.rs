@@ -14,7 +14,6 @@ pub fn add(left: u64, right: u64) -> u64 {
 pub use filter::CuckooFilter;
 pub use filter::CuckooFilterError;
 pub use hash::hash_djb2;
-pub use hash::hash_sbdm;
 
 #[cfg(test)]
 mod tests {

@@ -6,22 +6,10 @@
 pub fn hash_djb2(input: &[u8]) -> u32 {
     let mut hash: u32 = 5381;
     for &byte in input {
-        hash = ((hash << 5) + hash) + byte as u32;
+        hash = hash.wrapping_mul(33).wrapping_add(byte as u32);
     }
     hash
 }
-
-/// SBDM hash function
-///
-/// Source: <http://www.cse.yorku.ca/~oz/hash.html>
-pub fn hash_sbdm(input: &[u8]) -> u32 {
-    let mut hash: u32 = 0;
-    for &byte in input {
-        hash = byte as u32 + (hash << 6) + (hash << 16) - hash;
-    }
-    hash
-}
-
 /// Compute a 1 byte fingerprint from a hash digest but emit as 32 bits for XORing
 ///
 /// As in the C++ reference implementation, the fingerprint cannot be zero
@@ -46,13 +34,6 @@ mod tests {
     fn basic_hash_test_djb2() {
         let a = hash_djb2("cat".as_bytes());
         let b = hash_djb2("dog".as_bytes());
-        assert_ne!(a, b);
-    }
-
-    #[test]
-    fn basic_hash_test_sbdm() {
-        let a = hash_sbdm("cat".as_bytes());
-        let b = hash_sbdm("dog".as_bytes());
         assert_ne!(a, b);
     }
 }
