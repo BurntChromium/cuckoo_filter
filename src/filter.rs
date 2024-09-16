@@ -9,7 +9,7 @@
 use crate::hash;
 
 use alloc::vec;
-use alloc::vec::Vec; // Import the vec! macro
+use alloc::vec::Vec;
 
 pub type Input = [u8];
 pub type BucketIndex = u32;

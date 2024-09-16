@@ -4,9 +4,11 @@ A Cuckoo Filter is an efficient data structure for determining set membership. S
 
 Cuckoo Filters are a probabilistic data structure. This means that when the CF says "yes, I have seen this", it may be incorrect with a small probability (again, similar to a Bloom filter). However, if the CF answers "no, I haven't seen this", then this response is always correct. However, this correctness for the "_haven't_ seen this" statement depends on a particular implementation detail that not all CFs handle (it requires an eviction cache). This CF does use an eviction cache.  
 
-This crate implements a Cuckoo Filter with reasonable parameters for balancing overall capacity and achieving near optimal space savings. This filter can hold up to 8.5 billion items. At maximum size, this CF should consume about 4 GiB of RAM. This implementation is based off of [this paper (PDF link)](https://www.cs.cmu.edu/~binfan/papers/conext14_cuckoofilter.pdf).
+This crate implements an opinionated Cuckoo Filter with reasonable parameters for balancing overall capacity and achieving near optimal space savings. This filter can hold up to 8.5 billion items. At maximum size, this CF should consume about 4 GiB of RAM. This implementation is based off of [this paper (PDF link)](https://www.cs.cmu.edu/~binfan/papers/conext14_cuckoofilter.pdf).
 
-This implementation supports `![no_std]`, but it does require `alloc` (to use a Vector).
+This implementation
+- does not require the standard library (it enforces `![no_std]`), but it does require `alloc` (to use a Vector)
+- does not support dynamic resizing (resizing would be very expensive: you'd have to build a new filter, then re-insert each item, potentially with a long series of evictions if you are trying to shrink the filter)
 
 ### Using this Cuckoo Filter
 
@@ -17,7 +19,7 @@ There are three primary APIs for the filter: `insert`, `lookup`, and `delete` (t
 - `delete` removes an item from the filter
 
 ```rust
-// Try to make a filter supporting 128 items (can fail if you try to request more than item limit)
+// Try to make a filter supporting 128 items (creating a filter can fail if you try to request more than item limit of ~8 billion)
 let try_filter = CuckooFilter::new(128, false);
 let mut filter = try_filter.unwrap();
 // Something to insert, as bytes
