@@ -25,14 +25,15 @@
 //! // Lookups cannot fail - returns True or False
 //! let is_found = cf.lookup(&item);
 //! assert!(is_found);
-//! // Deletion can fail if you try to delete something not in the filter 
+//! // Deletion can fail if you try to delete something not in the filter
 //! let deletion = cf.delete(&item);
 //! assert!(deletion.is_ok());
 //! // Check that the item is no longer present
 //! assert!(!filter.lookup(&item));
 //! ```
 
-#![no_std]
+// We use the standard library in tests only, not for
+#![cfg_attr(not(test), no_std)]
 extern crate alloc;
 
 mod filter;
