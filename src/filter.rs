@@ -12,8 +12,6 @@ use core::default::Default;
 use core::hash::{Hash, Hasher};
 use core::marker::PhantomData;
 
-use crate::Murmur3Hasher;
-
 pub type BucketIndex = u32;
 pub type Fingerprint = u8;
 
@@ -137,7 +135,7 @@ impl<H: Hasher + Default> CuckooFilter<H> {
         item.hash(&mut self.hasher);
         let hash_value: u64 = self.hasher.finish();
         let upper_bits: u32 = (hash_value >> 32) as u32;
-        let fingerprint_u32: u32 = (upper_bits & ((1 << 8) - 1));
+        let fingerprint_u32: u32 = upper_bits & ((1 << 8) - 1);
         let bucket_1 = hash_value as u32 % self.length_u32; // lower bits
         let bucket_2 = bucket_1 ^ fingerprint_u32.wrapping_mul(0x5bd1e995) % self.length_u32;
         (bucket_1, bucket_2, fingerprint_u32 as u8)
@@ -286,6 +284,7 @@ impl<H: Hasher + Default> CuckooFilter<H> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::Murmur3Hasher;
 
     #[test]
     fn make_filter_normal_conditions() {

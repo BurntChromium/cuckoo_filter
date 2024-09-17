@@ -49,9 +49,9 @@ pub fn murmur3_x86_128(source: &[u8], seed: u32) -> u128 {
     let mut h3: u32 = seed;
     let mut h4: u32 = seed;
 
-    let mut buf = [0; 16];
+    let mut buf: [u8; 16] = [0; 16];
     let mut processed: usize = 0;
-    while processed < source.len() {
+    while processed <= source.len() {
         let remaining = source.len() - processed;
         let read = remaining.min(16);
         buf[..read].copy_from_slice(&source[processed..processed + read]);
@@ -86,7 +86,7 @@ pub fn murmur3_x86_128(source: &[u8], seed: u32) -> u128 {
                 .wrapping_add(h1)
                 .wrapping_mul(M)
                 .wrapping_add(C8);
-        } else if processed == source.len() {
+        } else if read == 0 {
             h1 ^= processed as u32;
             h2 ^= processed as u32;
             h3 ^= processed as u32;
