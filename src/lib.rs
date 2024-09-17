@@ -41,4 +41,4 @@ mod hash;
 
 pub use filter::CuckooFilter;
 pub use filter::CuckooFilterError;
-pub use hash::hash_djb2;
+pub use hash::murmur3_x86_128;
