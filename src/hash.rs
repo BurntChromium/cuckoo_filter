@@ -42,7 +42,7 @@ fn fmix32(k: u32) -> u32 {
     tmp
 }
 
-/// Murmur3 hash function, borrowed from the `murmur3` package <https://docs.rs/murmur3/latest/murmur3/>. See `NOTICE` file for copyright information.
+/// Murmur3 hash function, modified from the `murmur3` package <https://docs.rs/murmur3/latest/murmur3/>. See `NOTICE` file for copyright information.
 ///
 /// This function has been modified to remove its dependency on the standard library.
 pub fn murmur3_x86_128(source: &[u8], seed: u32) -> u128 {
