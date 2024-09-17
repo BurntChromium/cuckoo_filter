@@ -317,10 +317,26 @@ mod tests {
     }
 
     #[test]
-    fn insert_item() {
+    fn insert_bytes() {
         let filter = CuckooFilter::<Murmur3Hasher>::new(128, false);
         let mut cf = filter.unwrap();
         let r = cf.insert(&[1, 2, 3, 4, 5]);
+        assert!(r.is_ok());
+    }
+
+    #[test]
+    fn insert_number() {
+        let filter = CuckooFilter::<Murmur3Hasher>::new(128, false);
+        let mut cf = filter.unwrap();
+        let r = cf.insert(&19384);
+        assert!(r.is_ok());
+    }
+
+    #[test]
+    fn insert_string() {
+        let filter = CuckooFilter::<Murmur3Hasher>::new(128, false);
+        let mut cf = filter.unwrap();
+        let r = cf.insert(&"hello");
         assert!(r.is_ok());
     }
 
@@ -348,5 +364,36 @@ mod tests {
         assert!(d.is_ok());
         // Check that the item is no longer present
         assert!(!cf.lookup(&item));
+    }
+
+    #[test]
+    fn load_test_128() {
+        const SIZE: usize = 128;
+        let maybe_filter = CuckooFilter::<Murmur3Hasher>::new(SIZE, false);
+        let mut filter = maybe_filter.unwrap();
+        let mut success_count: u8 = 0;
+        for i in 1000..(1000 + SIZE + 20) {
+            let r = filter.insert(&i);
+            if r.is_ok() {
+                success_count += 1;
+            }
+        }
+        assert!((success_count as f32 / SIZE as f32) > 0.95f32);
+    }
+
+    #[test]
+    fn load_test_1000() {
+        const SIZE: usize = 1_000;
+        let maybe_filter = CuckooFilter::<Murmur3Hasher>::new(SIZE, false);
+        let mut filter = maybe_filter.unwrap();
+        let mut success_count: usize = 0;
+        for i in 1000..(1000 + SIZE + 20) {
+            let r = filter.insert(&i);
+            if r.is_ok() {
+                success_count += 1;
+            }
+        }
+        println!("successes: {success_count} / trials: {SIZE}");
+        assert!((success_count as f32 / SIZE as f32) > 0.95f32);
     }
 }
