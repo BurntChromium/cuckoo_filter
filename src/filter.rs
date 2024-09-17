@@ -366,6 +366,7 @@ mod tests {
         assert!(!cf.lookup(&item));
     }
 
+    // LOAD TESTS: realistically, the filter will fail to fill due to hash collisions before it's "theoretically" full - but we should be able to fill most of it!
     #[test]
     fn load_test_128() {
         const SIZE: usize = 128;
