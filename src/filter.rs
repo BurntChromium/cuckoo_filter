@@ -80,7 +80,7 @@ pub struct CuckooFilter<H: Hasher + Default> {
 impl<H: Hasher + Default> CuckooFilter<H> {
     /// Try to create a new Cuckoo Filter
     ///
-    /// This can fail if the desired filter would be too large. This evaluation can optionally be performed at compile time.
+    /// This can fail if the desired filter would be too large. This evaluation can optionally be performed at compile time. To do that, `max_items` must be a `const` variable!
     ///
     /// ### Caveats
     ///
@@ -306,6 +306,14 @@ mod tests {
             CuckooFilterError::CapacityExceedsItemLimit,
             filter2.unwrap_err()
         );
+    }
+
+    // Check that the comp time check throws
+    #[test]
+    #[should_panic(expected = "cuckoo filter initialized with too many items")]
+    fn make_filter_comp_time_check() {
+        const TOO_MANY_ITEMS: usize = ITEM_LIMIT + 1;
+        let _filter = CuckooFilter::<Murmur3Hasher>::new(TOO_MANY_ITEMS, true);
     }
 
     #[test]

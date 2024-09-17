@@ -1,4 +1,4 @@
-//! Grouped tests for all hash functions
+//! Grouped tests for hash function implementations
 //!
 //! (imports of `rand` and `HashSet` must be within a `test` CFG to keep things `no_std`)
 

@@ -40,8 +40,8 @@ assert!(!filter.lookup(&item));
 ### To Do List
 
 - ~~Unit tests~~ Basic unit tests are covered, now need to cover the edge cases
-- Switch to a proper (64 bit) hash function instead of DBJ2
+- ~~Switch to a proper (64 bit) hash function instead of DBJ2~~
 - Property tests
 - Benchmarking
 - Multi threading (first pass is probably an RwLock on the whole filter, more granular locks are possible but may not be worth the cost)
-- Support `Hashable` objects so users don't need to get the bytes themselves?
+- ~~Support `Hashable` objects so users don't need to get the bytes themselves?~~
