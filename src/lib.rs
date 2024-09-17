@@ -38,7 +38,8 @@ extern crate alloc;
 
 mod filter;
 mod hash;
+mod murmur3;
 
 pub use filter::CuckooFilter;
 pub use filter::CuckooFilterError;
-pub use hash::murmur3_x86_128;
+pub use murmur3::Murmur3Hasher;

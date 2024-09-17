@@ -2,8 +2,9 @@ Copyright notices
 
 ### Murmur 3
 
-Murmur3 hash function Rust implementation and associated utilities
-Changes from the source code are to make the hash function work in a `no_std` environment
+The following describes the copyright and license of a Rust implementation of a Murmur3 hash function and some associated utility functions that we have used in this library.
+Changes from the original code are to make the hash function work in a `no_std` environment. The code has also been extended to support the built in Hasher trait.
+The copyright and license from that code are reproduced below.
 
 Copyright (c) 2020 Stu Small
 Licensed under MIT

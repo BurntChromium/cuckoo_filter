@@ -6,12 +6,14 @@
 //!
 //! The paper's authors have provided a reference C++ implementation in this repository: <https://github.com/efficient/cuckoofilter>
 
-use crate::hash;
-
 use alloc::vec;
 use alloc::vec::Vec;
+use core::default::Default;
+use core::hash::{Hash, Hasher};
+use core::marker::PhantomData;
 
-pub type Input = [u8];
+use crate::Murmur3Hasher;
+
 pub type BucketIndex = u32;
 pub type Fingerprint = u8;
 
@@ -22,8 +24,6 @@ const BUCKET_SIZE: usize = 4;
 const MAX_BUCKETS: usize = u32::MAX as usize;
 /// The item limit needs to respect the POW(2) rounding we do
 const ITEM_LIMIT: usize = (MAX_BUCKETS.next_power_of_two() >> 1) * BUCKET_SIZE;
-/// Easily swap hash functions during development, TODO: pick one
-const HASH_FN: fn(&[u8]) -> u32 = hash::hash_djb2;
 
 /// An eviction cache holds an item that we couldn't reinsert
 ///
@@ -71,13 +71,15 @@ pub enum CuckooFilterError {
 /// - The eviction cache holds an item that we couldn't reinsert, and represents when the data structure is effectively/probabilistically full (as opposed to mechanically full)
 /// - The `length_u32` parameter lets us wrap around (modulo) bucket indices that would be too large
 #[derive(Debug)]
-pub struct CuckooFilter {
+pub struct CuckooFilter<H: Hasher + Default> {
     eviction_cache: EvictionVictim,
     data: Vec<[Fingerprint; BUCKET_SIZE]>,
     length_u32: u32,
+    hasher: H,
+    phantom: PhantomData<H>,
 }
 
-impl CuckooFilter {
+impl<H: Hasher + Default> CuckooFilter<H> {
     /// Try to create a new Cuckoo Filter
     ///
     /// This can fail if the desired filter would be too large. This evaluation can optionally be performed at compile time.
@@ -88,7 +90,7 @@ impl CuckooFilter {
     pub fn new(
         max_items: usize,
         compile_time_check: bool,
-    ) -> Result<CuckooFilter, CuckooFilterError> {
+    ) -> Result<CuckooFilter<H>, CuckooFilterError> {
         // Check item limit
         if compile_time_check {
             assert!(
@@ -107,6 +109,8 @@ impl CuckooFilter {
             eviction_cache: EvictionVictim::new(),
             data: vec![[0u8; BUCKET_SIZE]; number_of_buckets_actual],
             length_u32: number_of_buckets_actual as u32,
+            hasher: H::default(),
+            phantom: PhantomData,
         })
     }
 
@@ -129,15 +133,14 @@ impl CuckooFilter {
     /// This is (mostly) Equation 1 in section 3.1 of the paper
     ///
     /// However, unlike Equation 1, we follow the reference implementation from the authors and instead compute bucket 2 by XORing with a magic constant
-    fn buckets_from_item(&self, item: &Input) -> (BucketIndex, BucketIndex, Fingerprint) {
-        let bucket_1 = HASH_FN(item) & (self.length_u32 - 1);
-        // The magic constant is from MurmurHash2 (as in the reference impl)
-        let bucket_2 = bucket_1 ^ (hash::byte_fingerprint_long(bucket_1).wrapping_mul(0x5bd1e995));
-        (
-            bucket_1,
-            bucket_2 & (self.length_u32 - 1),
-            hash::byte_fingerprint_short(bucket_1),
-        )
+    fn buckets_from_item<T: Hash>(&mut self, item: &T) -> (BucketIndex, BucketIndex, Fingerprint) {
+        item.hash(&mut self.hasher);
+        let hash_value: u64 = self.hasher.finish();
+        let upper_bits: u32 = (hash_value >> 32) as u32;
+        let fingerprint_u32: u32 = (upper_bits & ((1 << 8) - 1));
+        let bucket_1 = hash_value as u32 % self.length_u32; // lower bits
+        let bucket_2 = bucket_1 ^ fingerprint_u32.wrapping_mul(0x5bd1e995) % self.length_u32;
+        (bucket_1, bucket_2, fingerprint_u32 as u8)
     }
 
     /// We can calculate a new bucket for an evicted item despite only having that item's fingerprint
@@ -183,7 +186,7 @@ impl CuckooFilter {
     }
 
     /// Add item to filter. Returns Err if filter is full
-    pub fn insert(&mut self, item: &Input) -> Result<(), CuckooFilterError> {
+    pub fn insert<T: Hash>(&mut self, item: &T) -> Result<(), CuckooFilterError> {
         // If the cache is filled then we're (effectively) out of space
         if self.eviction_cache.used {
             return Err(CuckooFilterError::OutOfSpace);
@@ -232,7 +235,7 @@ impl CuckooFilter {
     // }
 
     /// Check if item is in filter
-    pub fn lookup(&self, item: &Input) -> bool {
+    pub fn lookup<T: Hash>(&mut self, item: &T) -> bool {
         let (candidate_1, candidate_2, fingerprint) = self.buckets_from_item(item);
         // Check cache
         if self.eviction_cache.used
@@ -254,7 +257,7 @@ impl CuckooFilter {
     }
 
     /// Delete an item from the filter
-    pub fn delete(&mut self, item: &Input) -> Result<(), CuckooFilterError> {
+    pub fn delete<T: Hash>(&mut self, item: &T) -> Result<(), CuckooFilterError> {
         let (candidate_1, candidate_2, fingerprint) = self.buckets_from_item(item);
         // Check cache and clear if found
         if self.eviction_cache.used
@@ -286,7 +289,7 @@ mod tests {
 
     #[test]
     fn make_filter_normal_conditions() {
-        let filter = CuckooFilter::new(128, false);
+        let filter = CuckooFilter::<Murmur3Hasher>::new(128, false);
         assert!(filter.is_ok());
         let cf = filter.unwrap();
         assert_eq!(cf.length_u32, 128 / 4);
@@ -296,9 +299,9 @@ mod tests {
     // The filter should hold exactly the item limit but no more (error is around secondary checks relating to power of 2 rounding)
     #[test]
     fn make_filter_item_limit_boundary() {
-        let filter = CuckooFilter::new(ITEM_LIMIT, false);
+        let filter = CuckooFilter::<Murmur3Hasher>::new(ITEM_LIMIT, false);
         assert!(filter.is_ok());
-        let filter2 = CuckooFilter::new(ITEM_LIMIT + 1, false);
+        let filter2 = CuckooFilter::<Murmur3Hasher>::new(ITEM_LIMIT + 1, false);
         assert!(filter2.is_err());
         assert_eq!(
             CuckooFilterError::CapacityExceedsItemLimit,
@@ -308,7 +311,7 @@ mod tests {
 
     #[test]
     fn insert_item() {
-        let filter = CuckooFilter::new(128, false);
+        let filter = CuckooFilter::<Murmur3Hasher>::new(128, false);
         let mut cf = filter.unwrap();
         let r = cf.insert(&[1, 2, 3, 4, 5]);
         assert!(r.is_ok());
@@ -316,7 +319,7 @@ mod tests {
 
     #[test]
     fn retrieve_item() {
-        let filter = CuckooFilter::new(128, false);
+        let filter = CuckooFilter::<Murmur3Hasher>::new(128, false);
         let mut cf = filter.unwrap();
         let item = [1u8, 2, 3, 4, 5];
         let r = cf.insert(&item);
@@ -327,7 +330,7 @@ mod tests {
 
     #[test]
     fn delete_item() {
-        let filter = CuckooFilter::new(128, false);
+        let filter = CuckooFilter::<Murmur3Hasher>::new(128, false);
         let mut cf = filter.unwrap();
         let item = [1u8, 2, 3, 4, 5];
         let r = cf.insert(&item);
