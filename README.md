@@ -2,7 +2,7 @@
 
 A Cuckoo Filter is an efficient data structure for determining set membership. Set membership answers the question "have I seen this thing before?". A Cuckoo Filter (CF) is similar to a Bloom Filter, but unlike a Bloom Filter, Cuckoo Filters support item deletion. Cuckoo Filters also form the backbone of certain cryptographic protocols.
 
-Cuckoo Filters are a probabilistic data structure. This means that when the CF says "yes, I have seen this", it may be incorrect with a small probability (again, similar to a Bloom filter). However, if the CF answers "no, I haven't seen this", then this response is always correct. However, this correctness for the "_haven't_ seen this" statement depends on a particular implementation detail that not all CFs handle (it requires an eviction cache). This CF does use an eviction cache.  
+Cuckoo Filters are a probabilistic data structure. This means that when the CF says "yes, I have seen this", it may be incorrect with a small probability (there is a risk of false positives in the event of a hash collision). However, if the CF answers "no, I haven't seen this", then this response is always correct. (The correctness of the statement "I _haven't_ seen this" depends on a particular implementation detail that not all CFs handle (it requires an eviction cache). This CF does use an eviction cache.)  
 
 This crate implements an opinionated Cuckoo Filter with reasonable parameters for balancing overall capacity and achieving near optimal space savings. This filter can hold up to 8.5 billion items. At maximum size, this CF should consume about 4 GiB of RAM. This implementation is based off of [this paper (PDF link)](https://www.cs.cmu.edu/~binfan/papers/conext14_cuckoofilter.pdf).
 
@@ -18,12 +18,16 @@ There are three primary APIs for the filter: `insert`, `lookup`, and `delete` (t
 - `lookup` checks if the item is in the filter, and returns `true` if found, or `false` if not found
 - `delete` removes an item from the filter
 
+The Filter accepts any hash function which implements `Hasher + Default`. (Perf FYI: it calls `Default` on each operation to ensure idempotence, lacking a better supported way to reset a `Hasher`. This is normally not expensive, but if you're using a strange hash function, be aware).
+
+There is a default hashing function provided (Murmur3) that is faster than Rust's default (SipHash).
+
 ```rust
 // Try to make a filter supporting 128 items (creating a filter can fail if you try to request more than item limit of ~8 billion)
-let try_filter = CuckooFilter::new(128, false);
+let try_filter = CuckooFilter::<Murmur3Hasher>::new(128, false);;
 let mut filter = try_filter.unwrap();
-// Something to insert, as bytes
-let item = [1u8, 2, 3, 4, 5];
+// Something to insert
+let item = "the cat says meow";
 // Insertions can fail if the filter is out of space
 let insertion = cf.insert(&item);
 assert!(insertion.is_ok());
@@ -36,6 +40,8 @@ assert!(deletion.is_ok());
 // Check that the item is no longer present
 assert!(!filter.lookup(&item));
 ```
+
+The Cuckoo Filter may report that it is full, despite there being empty slots left. This occurs when there are too many hash collisions on the data. You may want to create the filter with a bit of headroom to mitigate the risk of this. Unit testing indicates that this _usually_ doesn't happen until the filter is well over 95% full, but your luck may vary. (There is no way around this without removing data from the filter, which breaks semantic guarantees.)
 
 ### To Do List
 

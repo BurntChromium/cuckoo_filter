@@ -15,10 +15,10 @@
 //!
 //! ```rust,ignore
 //! // Try to make a filter supporting 128 items (can fail if you try to request more than item limit)
-//! let try_filter = CuckooFilter::new(128, false);
+//! let try_filter = CuckooFilter::<Murmur3Hasher>::new(128, false);
 //! let mut filter = try_filter.unwrap();
-//! // Something to insert, as bytes
-//! let item = [1u8, 2, 3, 4, 5];
+//! // Something to insert
+//! let item = "the cat says meow";
 //! // Insertions can fail if the filter is out of space
 //! let insertion = cf.insert(&item);
 //! assert!(insertion.is_ok());
@@ -31,6 +31,8 @@
 //! // Check that the item is no longer present
 //! assert!(!filter.lookup(&item));
 //! ```
+//!
+//! The Cuckoo Filter may report that it is full, despite there being empty slots left. This occurs when there are too many hash collisions on the data. You may want to create the filter with a bit of headroom to mitigate the risk of this. Unit testing indicates that this _usually_ doesn't happen until the filter is well over 95% full, but your luck may vary.
 
 // We use the standard library in tests only, not for
 #![cfg_attr(not(test), no_std)]
