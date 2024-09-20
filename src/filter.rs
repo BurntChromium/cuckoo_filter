@@ -132,6 +132,8 @@ impl<H: Hasher + Default> CuckooFilter<H> {
     ///
     /// However, unlike Equation 1, we follow the reference implementation from the authors and instead compute bucket 2 by XORing with a magic constant
     fn buckets_from_item<T: Hash>(&mut self, item: &T) -> (BucketIndex, BucketIndex, Fingerprint) {
+        // To preserve idempotence, we need to reset the hasher's state every time
+        self.hasher = H::default();
         item.hash(&mut self.hasher);
         let hash_value: u64 = self.hasher.finish();
         let upper_bits: u32 = (hash_value >> 32) as u32;
@@ -285,12 +287,12 @@ impl<H: Hasher + Default> CuckooFilter<H> {
 mod tests {
     use super::*;
     use crate::Murmur3Hasher;
-    use rand::prelude::*;
+    use rand::{distributions::Uniform, prelude::*};
     use rand_chacha::ChaCha8Rng;
 
     // Utility fns
-    fn get_random_string_ascii(rng: &mut ChaCha8Rng, len: usize) -> String {
-        rng.sample_iter(&rand::distributions::Alphanumeric)
+    fn get_random_string(rng: &mut ChaCha8Rng, len: usize) -> String {
+        rng.sample_iter::<char, _>(&rand::distributions::Standard)
             .take(len)
             .map(char::from)
             .collect()
@@ -376,44 +378,42 @@ mod tests {
         assert!(!cf.lookup(&item));
     }
 
-    // LOAD TESTS: realistically, the filter will fail to fill due to hash collisions before it's "theoretically" full - but we should be able to fill most of it!
+    // LOAD TESTS: realistically, the filter will fail to fill due to hash collisions before it's "theoretically" full - but we should be able to fill most of it! This is disabled by default due to load
     #[test]
-    fn load_test_128() {
-        const SIZE: usize = 128;
+    #[ignore]
+    fn load_test_10m_ints() {
+        const SIZE: usize = 10_000_000;
+        let between = Uniform::from(0..u64::MAX);
+        let mut rng = ChaCha8Rng::seed_from_u64(42);
         let maybe_filter = CuckooFilter::<Murmur3Hasher>::new(SIZE, false);
         let mut filter = maybe_filter.unwrap();
-        let mut success_count: u8 = 0;
-        for i in 1000..(1000 + SIZE) {
+        let mut success_count: usize = 0;
+        for _ in 0..SIZE {
+            let i = rng.sample(between);
             let r = filter.insert(&i);
             if r.is_ok() {
                 success_count += 1;
             }
         }
+        println!("successes: {success_count} / trials: {SIZE}");
         assert!((success_count as f32 / SIZE as f32) > 0.95f32);
     }
 
     #[test]
-    fn load_test_1_million() {
-        const SIZE: usize = 1_000_000;
+    fn load_test_ten_thousand_str() {
+        const SIZE: usize = 10_000;
         let mut rng = ChaCha8Rng::seed_from_u64(42);
         let maybe_filter = CuckooFilter::<Murmur3Hasher>::new(SIZE, false);
         let mut filter = maybe_filter.unwrap();
         let mut success_count: usize = 0;
-        for i in 0..(20) {
-            let random_string = get_random_string_ascii(&mut rng, (i % 12) + 1);
+        for i in 0..SIZE {
+            let random_string = get_random_string(&mut rng, (i % 12) + 1);
             let r = filter.insert(&random_string);
             if r.is_ok() {
                 success_count += 1;
             }
-            println!(
-                "{:?}: {:?}, {}",
-                filter.buckets_from_item(&random_string),
-                r,
-                random_string
-            );
         }
         println!("successes: {success_count} / trials: {SIZE}");
         assert!((success_count as f32 / SIZE as f32) > 0.95f32);
-        // assert!(true == false);
     }
 }
