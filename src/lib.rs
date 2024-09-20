@@ -37,7 +37,6 @@
 extern crate alloc;
 
 mod filter;
-mod hash;
 mod murmur3;
 
 pub use filter::CuckooFilter;

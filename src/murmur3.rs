@@ -214,3 +214,82 @@ impl Hasher for Murmur3Hasher {
         self.digest = self.hash(bytes);
     }
 }
+
+/* -------------------- Unit Tests -------------------- */
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use core::hash::{Hash, Hasher};
+    use rand::prelude::*;
+    use rand_chacha::ChaCha8Rng;
+    use std::collections::HashSet;
+
+    // Constants across all tests
+    const NUM_SAMPLES: usize = 10000;
+    const ACCEPTABLE_COLLISION_RATE: f32 = 0.01;
+
+    // Utility fns
+    fn get_random_string(rng: &mut ChaCha8Rng, len: usize) -> String {
+        rng.sample_iter::<char, _>(&rand::distributions::Standard)
+            .take(len)
+            .map(char::from)
+            .collect()
+    }
+
+    fn test_hash_collisions_with_random_strings<H: Hasher>(hasher: &mut H) {
+        let mut rng = ChaCha8Rng::seed_from_u64(42);
+        let mut input_set: HashSet<String> = HashSet::with_capacity(NUM_SAMPLES);
+        let mut output_set: HashSet<u64> = HashSet::with_capacity(NUM_SAMPLES);
+        for i in 0..NUM_SAMPLES {
+            let random_string = get_random_string(&mut rng, i % 12);
+            hasher.write(random_string.as_bytes());
+            _ = input_set.insert(random_string.clone());
+            _ = output_set.insert(hasher.finish());
+        }
+        println!("inputs {}, outputs {}", input_set.len(), output_set.len());
+        assert!(
+            input_set.len() - output_set.len()
+                < (ACCEPTABLE_COLLISION_RATE * NUM_SAMPLES as f32) as usize
+        );
+    }
+
+    #[test]
+    fn basic_hash_test_murmur3() {
+        let a = murmur3_x86_128("cat".as_bytes(), 0);
+        let b = murmur3_x86_128("dog".as_bytes(), 0);
+        assert_ne!(a, b);
+    }
+
+    // Check implementation of hash function by counting the number of hash collisions for some random data
+    #[test]
+    fn collision_rate_murmur3() {
+        let mut h = Murmur3Hasher::new();
+        test_hash_collisions_with_random_strings::<Murmur3Hasher>(&mut h);
+    }
+
+    // Avalance resistance is the property for hash functions to map 2 inputs with 1 bit difference to wildly different outputs
+    // We're only checking implementation here, not checking theoretical algorithm properties
+    #[test]
+    fn basic_avalanche_check() {
+        const NUM_SAMPLES: usize = 10_000;
+        let mut output_set: HashSet<u128> = HashSet::with_capacity(NUM_SAMPLES);
+        for i in 0..NUM_SAMPLES {
+            output_set.insert(murmur3_x86_128(&i.to_le_bytes(), 0));
+        }
+        assert_eq!(output_set.len(), NUM_SAMPLES);
+    }
+
+    // Test the Hasher wrapper
+    #[test]
+    fn murmur3_wrapper_avalanche_check() {
+        let mut hasher = Murmur3Hasher::new();
+        const NUM_SAMPLES: usize = 10_000;
+        let mut output_set: HashSet<u64> = HashSet::with_capacity(NUM_SAMPLES);
+        for i in 0..NUM_SAMPLES {
+            i.hash(&mut hasher);
+            output_set.insert(hasher.finish());
+        }
+        assert_eq!(output_set.len(), NUM_SAMPLES);
+    }
+}

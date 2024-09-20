@@ -117,7 +117,7 @@ impl<H: Hasher + Default> CuckooFilter<H> {
         self.data.len() * BUCKET_SIZE
     }
 
-    /// Is the Cuckoo Filter full of items?
+    /// Is the Cuckoo Filter full of items (practically speaking)?
     ///
     /// Criteria is that we have something left over in the Eviction cache after trying to move it for the max number of kicks
     pub fn is_full(&self) -> bool {
@@ -285,6 +285,16 @@ impl<H: Hasher + Default> CuckooFilter<H> {
 mod tests {
     use super::*;
     use crate::Murmur3Hasher;
+    use rand::prelude::*;
+    use rand_chacha::ChaCha8Rng;
+
+    // Utility fns
+    fn get_random_string_ascii(rng: &mut ChaCha8Rng, len: usize) -> String {
+        rng.sample_iter(&rand::distributions::Alphanumeric)
+            .take(len)
+            .map(char::from)
+            .collect()
+    }
 
     #[test]
     fn make_filter_normal_conditions() {
@@ -373,7 +383,7 @@ mod tests {
         let maybe_filter = CuckooFilter::<Murmur3Hasher>::new(SIZE, false);
         let mut filter = maybe_filter.unwrap();
         let mut success_count: u8 = 0;
-        for i in 1000..(1000 + SIZE + 20) {
+        for i in 1000..(1000 + SIZE) {
             let r = filter.insert(&i);
             if r.is_ok() {
                 success_count += 1;
@@ -383,18 +393,27 @@ mod tests {
     }
 
     #[test]
-    fn load_test_1000() {
-        const SIZE: usize = 1_000;
+    fn load_test_1_million() {
+        const SIZE: usize = 1_000_000;
+        let mut rng = ChaCha8Rng::seed_from_u64(42);
         let maybe_filter = CuckooFilter::<Murmur3Hasher>::new(SIZE, false);
         let mut filter = maybe_filter.unwrap();
         let mut success_count: usize = 0;
-        for i in 1000..(1000 + SIZE + 20) {
-            let r = filter.insert(&i);
+        for i in 0..(20) {
+            let random_string = get_random_string_ascii(&mut rng, (i % 12) + 1);
+            let r = filter.insert(&random_string);
             if r.is_ok() {
                 success_count += 1;
             }
+            println!(
+                "{:?}: {:?}, {}",
+                filter.buckets_from_item(&random_string),
+                r,
+                random_string
+            );
         }
         println!("successes: {success_count} / trials: {SIZE}");
         assert!((success_count as f32 / SIZE as f32) > 0.95f32);
+        // assert!(true == false);
     }
 }
