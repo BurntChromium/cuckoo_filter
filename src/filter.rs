@@ -124,23 +124,40 @@ impl<H: Hasher + Default> CuckooFilter<H> {
         self.eviction_cache.used
     }
 
-    /// Calculate the buckets given an actual input item
+    /// Given a hash value (digest), compute the buckets and fingerprint
     ///
     /// We modulo the bucket indices because the hash may output a value larger than the true length of the backing data array. However, because our length is a power of 2, we can use bitwise AND.
     ///
     /// This is (mostly) Equation 1 in section 3.1 of the paper
     ///
     /// However, unlike Equation 1, we follow the reference implementation from the authors and instead compute bucket 2 by XORing with a magic constant
-    fn buckets_from_item<T: Hash>(&mut self, item: &T) -> (BucketIndex, BucketIndex, Fingerprint) {
-        // To preserve idempotence, we need to reset the hasher's state every time
-        self.hasher = H::default();
-        item.hash(&mut self.hasher);
-        let hash_value: u64 = self.hasher.finish();
+    fn digest_to_buckets(&self, hash_value: u64) -> (BucketIndex, BucketIndex, Fingerprint) {
         let upper_bits: u32 = (hash_value >> 32) as u32;
         let fingerprint_u32: u32 = upper_bits & ((1 << 8) - 1);
         let bucket_1 = hash_value as u32 % self.length_u32; // lower bits
         let bucket_2 = (bucket_1 ^ fingerprint_u32.wrapping_mul(0x5bd1e995)) % self.length_u32;
         (bucket_1, bucket_2, fingerprint_u32 as u8)
+    }
+
+    /// Calculate the buckets given a `Hash`able item
+    fn buckets_from_item<T: Hash>(&mut self, item: &T) -> (BucketIndex, BucketIndex, Fingerprint) {
+        // To preserve idempotence, we need to reset the hasher's state every time
+        self.hasher = H::default();
+        item.hash(&mut self.hasher);
+        let hash_value: u64 = self.hasher.finish();
+        self.digest_to_buckets(hash_value)
+    }
+
+    ///Compute buckets from a provided hash function without touching the internal state. This doesn't use the `Hash` trait, so it requires having access to the bytes of the item.
+    ///
+    /// This has a theoretical performance benefit because we don't need to reset the hasher (call `H::default()`). Your mileage may vary.
+    fn buckets_from_item_stateless(
+        &self,
+        item: &[u8],
+        hasher: fn(&[u8]) -> u64,
+    ) -> (BucketIndex, BucketIndex, Fingerprint) {
+        let hash_value: u64 = hasher(item);
+        self.digest_to_buckets(hash_value)
     }
 
     /// We can calculate a new bucket for an evicted item despite only having that item's fingerprint
@@ -229,14 +246,10 @@ impl<H: Hasher + Default> CuckooFilter<H> {
         Err(CuckooFilterError::OutOfSpace)
     }
 
-    /// Add item to filter. Returns Err if filter is full, or if item already exists.
-    // pub fn insert_unique(item: &Input) -> Result<(), CuckooFilterOpError> {
-    //     Ok(())
-    // }
-
-    /// Check if item is in filter
-    pub fn lookup<T: Hash>(&mut self, item: &T) -> bool {
-        let (candidate_1, candidate_2, fingerprint) = self.buckets_from_item(item);
+    /// Identifies if an item is in the filter
+    ///
+    /// This is an internal method that public APIs wrap around
+    fn internal_lookup(&self, candidate_1: u32, candidate_2: u32, fingerprint: u8) -> bool {
         // Check cache
         if self.eviction_cache.used
             && fingerprint == self.eviction_cache.fingerprint
@@ -254,6 +267,24 @@ impl<H: Hasher + Default> CuckooFilter<H> {
             }
         }
         false
+    }
+
+    /// Add item to filter. Returns Err if filter is full, or if item already exists.
+    // pub fn insert_unique(item: &Input) -> Result<(), CuckooFilterOpError> {
+    //     Ok(())
+    // }
+
+    /// Check if item is in filter
+    pub fn lookup<T: Hash>(&mut self, item: &T) -> bool {
+        let (candidate_1, candidate_2, fingerprint) = self.buckets_from_item(item);
+        self.internal_lookup(candidate_1, candidate_2, fingerprint)
+    }
+
+    /// Check if item is in filter, but use a stateless hash function
+    pub fn lookup_stateless(&self, item: &[u8], hash_function: fn(&[u8]) -> u64) -> bool {
+        let (candidate_1, candidate_2, fingerprint) =
+            self.buckets_from_item_stateless(item, hash_function);
+        self.internal_lookup(candidate_1, candidate_2, fingerprint)
     }
 
     /// Delete an item from the filter
