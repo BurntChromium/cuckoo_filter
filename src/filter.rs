@@ -85,6 +85,16 @@ impl<H: Hasher + Default> CuckooFilter<H> {
     /// ### Caveats
     ///
     /// - We must round the size of our backing vector of data to a power of two. This is because we will modulo the index when our hash function creates a bucket index bigger than the backing vector. If the data was *not* a power of 2, our indices would be subject to "Modulo bias" and cause more hash collisions.
+    ///
+    /// Add item to filter. Returns Err if filter is full
+    ///
+    /// ```
+    /// use cuckoo_filter::CuckooFilter;
+    /// use cuckoo_filter::Murmur3Hasher;
+    ///
+    /// let try_filter = CuckooFilter::<Murmur3Hasher>::new(128, false);
+    /// assert!(try_filter.is_ok())
+    /// ```
     pub fn new(
         max_items: usize,
         compile_time_check: bool,
@@ -202,15 +212,19 @@ impl<H: Hasher + Default> CuckooFilter<H> {
         evicted_fingerprint
     }
 
-    /// Add item to filter. Returns Err if filter is full
-    pub fn insert<T: Hash>(&mut self, item: &T) -> Result<(), CuckooFilterError> {
+    /// Tries to place an item into the filter
+    ///
+    /// Internal method, public APIs wrap this
+    fn internal_insert(
+        &mut self,
+        candidate_1: u32,
+        candidate_2: u32,
+        fingerprint: u8,
+    ) -> Result<(), CuckooFilterError> {
         // If the cache is filled then we're (effectively) out of space
         if self.eviction_cache.used {
             return Err(CuckooFilterError::OutOfSpace);
         }
-
-        let (candidate_1, candidate_2, fingerprint) = self.buckets_from_item(item);
-
         // Try inserting into either bucket
         for &bucket_index in &[candidate_1, candidate_2] {
             if self.try_insert_at_bucket(bucket_index, fingerprint) {
@@ -244,6 +258,42 @@ impl<H: Hasher + Default> CuckooFilter<H> {
         self.eviction_cache.fingerprint = evicted_fingerprint;
         self.eviction_cache.used = true;
         Err(CuckooFilterError::OutOfSpace)
+    }
+
+    /// Add item to filter. Returns Err if filter is full
+    ///
+    /// ```
+    /// use cuckoo_filter::CuckooFilter;
+    /// use cuckoo_filter::Murmur3Hasher;
+    ///
+    /// let try_filter = CuckooFilter::<Murmur3Hasher>::new(128, false);
+    /// let mut filter = try_filter.unwrap();
+    /// let ins = filter.insert(&"hello, I am some data");
+    /// assert!(ins.is_ok());
+    /// ```
+    pub fn insert<T: Hash>(&mut self, item: &T) -> Result<(), CuckooFilterError> {
+        let (candidate_1, candidate_2, fingerprint) = self.buckets_from_item(item);
+        self.internal_insert(candidate_1, candidate_2, fingerprint)
+    }
+
+    /// Add item to filter, but use a stateless hash function
+    ///
+    /// ```
+    /// use cuckoo_filter::*;
+    ///
+    /// let try_filter = CuckooFilter::<Murmur3Hasher>::new(128, false);
+    /// let mut filter = try_filter.unwrap();
+    /// let ins = filter.insert_stateless(&"hello, I am some data".as_bytes(), murmur3_x86_64bit);
+    /// assert!(ins.is_ok());
+    /// ```
+    pub fn insert_stateless(
+        &mut self,
+        item: &[u8],
+        hash_function: fn(&[u8]) -> u64,
+    ) -> Result<(), CuckooFilterError> {
+        let (candidate_1, candidate_2, fingerprint) =
+            self.buckets_from_item_stateless(item, hash_function);
+        self.internal_insert(candidate_1, candidate_2, fingerprint)
     }
 
     /// Identifies if an item is in the filter

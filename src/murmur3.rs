@@ -34,7 +34,7 @@ fn fmix32(k: u32) -> u32 {
 /// Murmur3 hash function, modified from the `murmur3` package <https://docs.rs/murmur3/latest/murmur3/>. See `NOTICE` file for copyright information.
 ///
 /// This function has been modified to remove its dependency on the standard library.
-fn _murmur3_x86_128(source: &[u8], seed: u32) -> u128 {
+pub fn _murmur3_x86_128(source: &[u8], seed: u32) -> u128 {
     const C1: u32 = 0x239b_961b;
     const C2: u32 = 0xab0e_9789;
     const C3: u32 = 0x38b3_4ae5;
@@ -173,6 +173,11 @@ fn _murmur3_x86_128(source: &[u8], seed: u32) -> u128 {
         }
     }
     unreachable!("The loop should always return in the last block")
+}
+
+/// 64
+pub fn murmur3_x86_64bit(source: &[u8]) -> u64 {
+    _murmur3_x86_128(source, 0u32) as u64
 }
 
 /// A wrapper around the Murmur3 hash function so it can support `Hasher` and `Hash` traits

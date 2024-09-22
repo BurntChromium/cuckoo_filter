@@ -4,13 +4,17 @@ A Cuckoo Filter is an efficient data structure for determining set membership. S
 
 Cuckoo Filters are a probabilistic data structure. This means that when the CF says "yes, I have seen this", it may be incorrect with a small probability (there is a risk of false positives in the event of a hash collision). However, if the CF answers "no, I haven't seen this", then this response is always correct. (The correctness of the statement "I _haven't_ seen this" depends on a particular implementation detail that not all CFs handle (it requires an eviction cache). This CF does use an eviction cache.)  
 
-This crate implements an opinionated Cuckoo Filter with reasonable parameters for balancing overall capacity and achieving near optimal space savings. This filter can hold up to 8.5 billion items. At maximum size, this CF should consume about 4 GiB of RAM. This implementation is based off of [this paper (PDF link)](https://www.cs.cmu.edu/~binfan/papers/conext14_cuckoofilter.pdf).
+This crate is a library that implements Cuckoo Filter with reasonable parameters for balancing overall capacity and achieving near optimal space savings. This filter can hold up to ~8.5 billion items. At maximum size, this CF should consume about 8.5 GiB of RAM (each item consumes 1 byte). This implementation is based off of [this paper (PDF link)](https://www.cs.cmu.edu/~binfan/papers/conext14_cuckoofilter.pdf).
 
 This implementation
 - does not require the standard library (it enforces `![no_std]`), but it does require `alloc` (to use a Vector)
 - does not support dynamic resizing (resizing would be very expensive: you'd have to build a new filter, then re-insert each item, potentially with a long series of evictions if you are trying to shrink the filter)
 
-### Using this Cuckoo Filter
+### Why not use a normal Hash Table?
+
+Compared to a normal hash table, a Cuckoo Filter is much more efficient. This filter stores only 8 bits per item, and searching for an item (probing) operates in constant time because each item can only be in one of 9 fixed locations. (By contrast, the standard library `HashMap` may, theoretically, need to perform arbitrarily many collision resolution steps using [quadratic probing](https://en.wikipedia.org/wiki/Quadratic_probing), although this is unlikely.)
+
+### The standard API for this Cuckoo Filter
 
 There are three primary APIs for the filter: `insert`, `lookup`, and `delete` (this follows the paper's naming convention). 
 
@@ -42,6 +46,8 @@ assert!(!filter.lookup(&item));
 ```
 
 The Cuckoo Filter may report that it is full, despite there being empty slots left. This occurs when there are too many hash collisions on the data. You may want to create the filter with a bit of headroom to mitigate the risk of this. Unit testing indicates that this _usually_ doesn't happen until the filter is well over 95% full, but your luck may vary. (There is no way around this without removing data from the filter, which breaks semantic guarantees.)
+
+Additional APIs are available, check the documentation for details.
 
 ### To Do List
 

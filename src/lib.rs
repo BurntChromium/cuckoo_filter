@@ -2,7 +2,7 @@
 //!
 //! A Cuckoo Filter is an efficient data structure for determining set membership. Set membership answers the question "have I seen this thing before?". A Cuckoo Filter (CF) is similar to a Bloom Filter, but unlike a Bloom Filter, Cuckoo Filters support item deletion. Cuckoo Filters also form the backbone of certain cryptographic protocols.
 //!
-//! This crate implements a Cuckoo Filter with reasonable parameters for balancing overall capacity and achieving near optimal space savings. This filter can hold up to 8.5 billion items. At maximum size, this CF should consume about 4 GiB of RAM.
+//! This crate implements a Cuckoo Filter with reasonable parameters for balancing overall capacity and achieving near optimal space savings. This filter can hold up to 8.5 billion items. At maximum size, this CF should consume about 8.5 GiB of RAM.
 //!
 //! This implementation supports `![no_std]`, but it does require `alloc` (to use a Vector).
 //!
@@ -13,20 +13,26 @@
 //! - `lookup` checks if the item is in the filter, and returns `true` if found, or `false` if not found
 //! - `delete` removes an item from the filter
 //!
-//! ```rust,ignore
+//! ```rust
+//! use cuckoo_filter::CuckooFilter;
+//! use cuckoo_filter::Murmur3Hasher;
+//!
 //! // Try to make a filter supporting 128 items (can fail if you try to request more than item limit)
 //! let try_filter = CuckooFilter::<Murmur3Hasher>::new(128, false);
 //! let mut filter = try_filter.unwrap();
+//!
 //! // Something to insert
 //! let item = "the cat says meow";
 //! // Insertions can fail if the filter is out of space
-//! let insertion = cf.insert(&item);
+//! let insertion = filter.insert(&item);
 //! assert!(insertion.is_ok());
+//!
 //! // Lookups cannot fail - returns True or False
-//! let is_found = cf.lookup(&item);
+//! let is_found = filter.lookup(&item);
 //! assert!(is_found);
+//!
 //! // Deletion can fail if you try to delete something not in the filter
-//! let deletion = cf.delete(&item);
+//! let deletion = filter.delete(&item);
 //! assert!(deletion.is_ok());
 //! // Check that the item is no longer present
 //! assert!(!filter.lookup(&item));
@@ -43,4 +49,5 @@ mod murmur3;
 
 pub use filter::CuckooFilter;
 pub use filter::CuckooFilterError;
+pub use murmur3::murmur3_x86_64bit;
 pub use murmur3::Murmur3Hasher;
