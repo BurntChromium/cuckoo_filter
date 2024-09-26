@@ -24,7 +24,7 @@ There are three primary APIs for the filter: `insert`, `lookup`, and `delete` (t
 
 The Filter accepts any hash function which implements `Hasher + Default`. (Perf FYI: it calls `Default` on each operation to ensure idempotence, lacking a better supported way to reset a `Hasher`. This is normally not expensive, but if you're using a strange hash function, be aware).
 
-There is a default hashing function provided (Murmur3) that is faster than Rust's default (SipHash).
+There is a default hashing function provided (Murmur3) that is faster than Rust's default (SipHash). There is also support for stateless hash functions (that don't implement `Hasher`). See the documentation for more details.
 
 ```rust
 // Try to make a filter supporting 128 items (creating a filter can fail if you try to request more than item limit of ~8 billion)

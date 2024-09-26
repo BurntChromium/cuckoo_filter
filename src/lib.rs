@@ -40,9 +40,11 @@
 //!
 //! The Cuckoo Filter may report that it is full, despite there being empty slots left. This occurs when there are too many hash collisions on the data. You may want to create the filter with a bit of headroom to mitigate the risk of this. Unit testing indicates that this _usually_ doesn't happen until the filter is well over 95% full, but your luck may vary.
 
-// We use the standard library in tests only, not for
+// We use the standard library in tests only, not for runtime
 #![cfg_attr(not(test), no_std)]
 extern crate alloc;
+
+// REMINDER for self: code test coverage here https://lib.rs/crates/cargo-llvm-cov
 
 mod filter;
 mod murmur3;
